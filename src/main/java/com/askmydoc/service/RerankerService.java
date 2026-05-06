@@ -20,11 +20,11 @@ import static com.askmydoc.constants.AppConstants.*;
 public class RerankerService {
     private final RestClient client;
 
-    @Value("${COHERE_API_KEY}")
+    @Value("${cohere.api.key}")
     private String apiKey;
 
     public RerankerService(RestClient.Builder builder) {
-        client = builder.baseUrl(COHERE_BASE_URL).defaultHeader(AUTHORIZATION, getToken()).build();
+        client = builder.baseUrl(COHERE_BASE_URL).build();
     }
 
     public List<Document> reRankDocs(List<Document> chunks, String query) {
@@ -46,6 +46,7 @@ public class RerankerService {
         CohereResponse response = client.post()
                 .uri(COHERE_RERANKED_ENDPOINT)
                 .body(requestBody)
+                .header(AUTHORIZATION, getToken())
                 .retrieve()
                 .body(CohereResponse.class);
 
