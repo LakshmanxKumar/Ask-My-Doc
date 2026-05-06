@@ -79,7 +79,7 @@ public class QnAService {
 
             SearchRequest searchRequest = SearchRequest.builder()
                     .query(query)
-                    .topK(10)
+                    .topK(5)
                     .filterExpression(buildFilterExpression(docIds))
                     .build();
 
