@@ -9,8 +9,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.retry.support.RetryTemplate;
 
-import static com.askmydoc.constants.AppConstants.QNA_MODEL;
-import static com.askmydoc.constants.AppConstants.REWRITE_MODEL;
+import static com.askmydoc.constants.AppConstants.*;
 import static com.askmydoc.constants.Prompts.QUERY_REWRITE_SYSTEM_PROMPT;
 import static com.askmydoc.constants.Prompts.SYSTEM_PROMPT;
 
@@ -29,6 +28,7 @@ public class AIConfig {
                         .defaultOptions(
                                 GoogleGenAiChatOptions.builder()
                                         .model(QNA_MODEL)
+                                        .thinkingBudget(QNA_MODEL_THINKING_BUDGET)
                                         .temperature(0.2)
                                         .build()
                         )
@@ -53,6 +53,7 @@ public class AIConfig {
                         .defaultOptions(
                                 GoogleGenAiChatOptions.builder()
                                         .model(REWRITE_MODEL)
+                                        .thinkingBudget(REWRITE_MODEL_THINKING_BUDGET)
                                         .temperature(0.1)
                                         .build()
                         )

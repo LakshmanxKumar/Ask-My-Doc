@@ -22,4 +22,8 @@ public class AppConstants {
 
     public static final String REWRITE_MODEL = "gemini-2.5-flash";
 
+    public static final int QNA_MODEL_THINKING_BUDGET = 1024;
+
+    public static final int REWRITE_MODEL_THINKING_BUDGET = 0;
+
 }
