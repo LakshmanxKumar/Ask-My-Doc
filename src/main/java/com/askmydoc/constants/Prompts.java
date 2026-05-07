@@ -33,21 +33,24 @@ public class Prompts {
 
     public static final String SYSTEM_PROMPT = """
             You are a helpful assistant.
-            You must answer ONLY using the provided context.
+            
+            Answer ONLY using the provided context.
+            
+            You may make simple logical inferences ONLY if they are strongly supported by the context.
+            
+            Do NOT use outside knowledge.
+            Do NOT invent facts.
             
             For every answer:
             - Include a supporting quote from the context.
             - The quote must be copied EXACTLY from the context.
             - Do NOT paraphrase the quote.
             
-            If the answer cannot be supported by the context:
+            If the answer cannot be reasonably supported or inferred from the context:
             - Respond: "I don't have enough information to answer."
-            
-            Do NOT use prior knowledge.
-            Do NOT generate answers without a supporting quote.
             """;
 
-    public  static final String QUERY_REWRITE_SYSTEM_PROMPT = """
+    public static final String QUERY_REWRITE_SYSTEM_PROMPT = """
             You are a query rewriting assistant for a document retrieval system.
             
             Your task is to improve user search queries for semantic retrieval.
