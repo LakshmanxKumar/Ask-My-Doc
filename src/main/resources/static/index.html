@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ask My Doc</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="app-header">
+      <h1>Ask My Doc</h1>
+      <p class="tagline">Upload a document, then ask questions grounded in what it says.</p>
+    </header>
+
+    <div class="layout">
+      <aside class="panel documents-panel">
+        <div class="panel-heading">
+          <h2>Documents</h2>
+          <button type="button" id="clear-all-btn" class="clear-all-btn">Clear all</button>
+        </div>
+
+        <form id="upload-form" class="upload-form">
+          <label for="file-input" class="file-label">
+            <span id="file-label-text">Choose files</span>
+            <input type="file" id="file-input" name="file" multiple />
+          </label>
+          <button type="submit" id="upload-btn">Upload</button>
+        </form>
+        <p id="upload-status" class="status" aria-live="polite"></p>
+
+        <ul id="document-list" class="document-list"></ul>
+        <p id="empty-state" class="empty-state">No documents yet. Upload one to get started.</p>
+      </aside>
+
+      <main class="panel query-panel">
+        <h2>Ask a question</h2>
+        <p class="hint">Select one or more documents on the left, then ask your question.</p>
+
+        <form id="query-form" class="query-form">
+          <textarea
+            id="query-input"
+            placeholder="What would you like to know?"
+            rows="4"
+          ></textarea>
+          <button type="submit" id="ask-btn">Ask</button>
+        </form>
+        <p id="query-status" class="status" aria-live="polite"></p>
+
+        <div id="answer-block" class="answer-block" hidden>
+          <h3>Answer</h3>
+          <p id="answer-text"></p>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

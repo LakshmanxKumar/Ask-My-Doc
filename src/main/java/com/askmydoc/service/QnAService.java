@@ -1,7 +1,10 @@
 package com.askmydoc.service;
 
+import com.askmydoc.exceptions.AskMyDocException;
 import com.askmydoc.model.ModelResponse;
 import com.askmydoc.model.QueryRewriteResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
@@ -23,6 +26,8 @@ public class QnAService {
     private final VectorStore vectorStore;
     private final RerankerService rerankerService;
 
+    private final static Logger logger = LoggerFactory.getLogger(QnAService.class);
+
     public QnAService(@Qualifier("qnaChatClient") ChatClient qnAChatClient,
                       @Qualifier("rewriteChatClient") ChatClient rewriteChatClient, VectorStore vectorStore, RerankerService rerankerService) {
         this.qnAChatClient = qnAChatClient;
@@ -35,7 +40,9 @@ public class QnAService {
     public String ask(String ques, List<String> docIds) {
 
         List<Document> reRankedResult = getRerankedSearchResults(ques, docIds);
-
+        if (reRankedResult.isEmpty()) {
+            return "Error while fetching";
+        }
         String context = IntStream.range(0, reRankedResult.size())
                 .mapToObj(i -> {
                     Document d = reRankedResult.get(i);
@@ -93,7 +100,10 @@ public class QnAService {
                 uniqueChunks.putIfAbsent(uniqueKey, doc);
             }
         }
-
+        if (uniqueChunks.isEmpty()) {
+            logger.error("No Chunks found");
+            return Collections.emptyList();
+        }
         return rerankerService.reRankDocs(
                 new ArrayList<>(uniqueChunks.values()),
                 qrr.getCorrectedQuery()
