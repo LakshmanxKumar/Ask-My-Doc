@@ -1,7 +1,7 @@
 # Ask-My-Doc
 
 Ask-My-Doc is a Java Spring Boot application that allows users to upload documents and query them using a simple API. The application provides endpoints for document upload and question-answering from those documents.
-
+![Ask-My-Doc UI](assets/ui-screenshot.png)
 ---
 
 ## Setup
