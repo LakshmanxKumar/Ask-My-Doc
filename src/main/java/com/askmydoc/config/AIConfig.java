@@ -29,7 +29,7 @@ public class AIConfig {
                                 GoogleGenAiChatOptions.builder()
                                         .model(QNA_MODEL)
                                         .thinkingBudget(QNA_MODEL_THINKING_BUDGET)
-                                        .temperature(0.2)
+                                        .temperature(0.6)
                                         .build()
                         )
                         .retryTemplate(retryTemplate)

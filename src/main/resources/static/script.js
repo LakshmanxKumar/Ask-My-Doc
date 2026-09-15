@@ -118,14 +118,34 @@ uploadForm.addEventListener("submit", async (e) => {
   uploadStatus.textContent = "Uploading…";
 
   try {
-    const res = await fetch("/api/v1/upload", {
+    const res = await fetch("/upload", {
       method: "POST",
       body: formData,
     });
 
     if (!res.ok) {
-      const errBody = await res.text();
-      throw new Error(errBody || `Upload failed (${res.status})`);
+      let message = `Upload failed (${res.status})`;
+      try {
+        const raw = await res.text();
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              message = parsed[0];
+            } else if (typeof parsed === "string") {
+              message = parsed;
+            } else {
+              message = raw;
+            }
+          } catch {
+            // Not JSON — the body itself is the plain-text message.
+            message = raw;
+          }
+        }
+      } catch {
+        // Ignore — keep the generic fallback message.
+      }
+      throw new Error(message);
     }
 
     const docIds = await res.json();
@@ -192,7 +212,7 @@ queryForm.addEventListener("submit", async (e) => {
   answerBlock.hidden = true;
 
   try {
-    const res = await fetch("/api/v1/query", {
+    const res = await fetch("/query", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userQuery: question, docIds: selectedIds }),
