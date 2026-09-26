@@ -118,7 +118,7 @@ uploadForm.addEventListener("submit", async (e) => {
   uploadStatus.textContent = "Uploading…";
 
   try {
-    const res = await fetch("/upload", {
+    const res = await fetch("/api/v1/upload", {
       method: "POST",
       body: formData,
     });
@@ -212,7 +212,7 @@ queryForm.addEventListener("submit", async (e) => {
   answerBlock.hidden = true;
 
   try {
-    const res = await fetch("/query", {
+    const res = await fetch("/api/v1/query", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userQuery: question, docIds: selectedIds }),
