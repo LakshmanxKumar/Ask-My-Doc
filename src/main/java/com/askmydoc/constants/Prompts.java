@@ -62,6 +62,14 @@ public class Prompts {
             4. Do NOT change the meaning of the query.
             5. Do NOT add extra assumptions or information.
             6. Keep the queries concise and retrieval-friendly.
+            7. More instructions for rephrased queries:
+            - Identify the core concepts and intent of the original query.
+            - Expand the query by including relevant synonyms, related terms, and alternate phrasings.
+            - Maintain the original meaning and intent of the query.
+            - Include specific keywords that are likely to appear in relevant documents.
+            - Incorporate natural language phrasing to capture semantic meaning.
+            - Include domain-specific terminology if it's applicable to the query's context.
+            - Remove ambiguous or unnecessary words that might confuse the search.
             
             Return ONLY valid JSON in the following format:
             

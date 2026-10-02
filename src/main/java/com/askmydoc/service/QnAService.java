@@ -13,6 +13,8 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -25,15 +27,18 @@ public class QnAService {
     private final ChatClient rewriteChatClient;
     private final VectorStore vectorStore;
     private final RerankerService rerankerService;
+    private final ExecutorService vectorSearchExecutor;
 
-    private final static Logger logger = LoggerFactory.getLogger(QnAService.class);
+    private static final Logger logger = LoggerFactory.getLogger(QnAService.class);
 
     public QnAService(@Qualifier("qnaChatClient") ChatClient qnAChatClient,
-                      @Qualifier("rewriteChatClient") ChatClient rewriteChatClient, VectorStore vectorStore, RerankerService rerankerService) {
+                      @Qualifier("rewriteChatClient") ChatClient rewriteChatClient, VectorStore vectorStore,
+                      RerankerService rerankerService, ExecutorService vectorSearchExecutor) {
         this.qnAChatClient = qnAChatClient;
         this.vectorStore = vectorStore;
         this.rerankerService = rerankerService;
         this.rewriteChatClient = rewriteChatClient;
+        this.vectorSearchExecutor = vectorSearchExecutor;
 
     }
 
@@ -60,7 +65,25 @@ public class QnAService {
         return getValidatedResponse(modelResponse, reRankedResult);
     }
 
-    private List<Document> getRerankedSearchResults(String ques, List<String> docIds) {
+    private List<Document> getRerankedSearchResults(
+            String ques, List<String> docIds) {
+
+        QueryRewriteResponse qrr = rewriteQuery(ques);
+
+        List<Document> uniqueChunks = searchAndDeduplicate(qrr, docIds);
+
+        if (uniqueChunks.isEmpty()) {
+            logger.error("No Chunks found");
+            return Collections.emptyList();
+        }
+
+        return rerankerService.reRankDocs(
+                uniqueChunks,
+                qrr.getCorrectedQuery().toLowerCase()
+        );
+    }
+
+    private QueryRewriteResponse rewriteQuery(String ques) {
 
         String userPrompt = """
                 Rewrite the following query for retrieval:
@@ -68,46 +91,53 @@ public class QnAService {
                 %s
                 """.formatted(ques);
 
-        QueryRewriteResponse qrr =
-                rewriteChatClient.prompt()
-                        .user(userPrompt)
-                        .call()
-                        .entity(QueryRewriteResponse.class);
+        return rewriteChatClient.prompt()
+                .user(userPrompt)
+                .call()
+                .entity(QueryRewriteResponse.class);
+    }
 
-        String[] queries = {
-                qrr.getCorrectedQuery(),
-                qrr.getRephrasedQueries().getFirst(),
-                qrr.getRephrasedQueries().getLast()
-        };
+    private List<Document> searchAndDeduplicate(
+            QueryRewriteResponse qrr,
+            List<String> docIds) {
+
+        List<String> queries = List.of(
+                qrr.getCorrectedQuery().toLowerCase(),
+                qrr.getRephrasedQueries().getFirst().toLowerCase(),
+                qrr.getRephrasedQueries().getLast().toLowerCase()
+        );
+
+        List<CompletableFuture<List<Document>>> futures = queries.stream()
+                .map(query -> CompletableFuture.supplyAsync(
+                        () -> searchSimilarDocuments(query, docIds),
+                        vectorSearchExecutor
+                ))
+                .toList();
 
         Map<String, Document> uniqueChunks = new LinkedHashMap<>();
 
-        for (String query : queries) {
+        for (CompletableFuture<List<Document>> future : futures) {
+            for (Document doc : future.join()) {
 
-            SearchRequest searchRequest = SearchRequest.builder()
-                    .query(query)
-                    .topK(5)
-                    .filterExpression(buildFilterExpression(docIds))
-                    .build();
-
-            List<Document> retrievedDocs = vectorStore.similaritySearch(searchRequest);
-
-            for (Document doc : retrievedDocs) {
                 String uniqueKey =
                         doc.getMetadata().get("docId")
-                                + ":" +
-                                doc.getMetadata().get("chunkIndex");
+                                + ":"
+                                + doc.getMetadata().get("chunkIndex");
+
                 uniqueChunks.putIfAbsent(uniqueKey, doc);
             }
         }
-        if (uniqueChunks.isEmpty()) {
-            logger.error("No Chunks found");
-            return Collections.emptyList();
-        }
-        return rerankerService.reRankDocs(
-                new ArrayList<>(uniqueChunks.values()),
-                qrr.getCorrectedQuery()
-        );
+
+        return new ArrayList<>(uniqueChunks.values());
+    }
+
+    private List<Document> searchSimilarDocuments(String query, List<String> docIds) {
+        SearchRequest searchRequest = SearchRequest.builder()
+                .query(query)
+                .topK(5)
+                .filterExpression(buildFilterExpression(docIds))
+                .build();
+        return vectorStore.similaritySearch(searchRequest);
     }
 
     private String getValidatedResponse(ModelResponse response, List<Document> docs) {

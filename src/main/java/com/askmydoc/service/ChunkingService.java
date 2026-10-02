@@ -11,6 +11,9 @@ public class ChunkingService {
     private static final int OVERLAP = 30;
 
     public List<String> chunk(String text) {
+        // embeddings are typically case-sensitive, so better to have them in same case
+        text = text.toLowerCase();
+
         List<String> chunks = new ArrayList<>();
         String[] words = text.split("\\s+");
         int start = 0;
