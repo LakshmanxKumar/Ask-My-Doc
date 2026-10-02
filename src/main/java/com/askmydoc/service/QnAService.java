@@ -203,8 +203,10 @@ public class QnAService {
             throw new IllegalArgumentException("At least one docId must be provided");
         }
 
-        return docIds.stream()
-                .map(id -> "docId == '" + id + "'")
-                .collect(Collectors.joining(" OR "));
+        String ids = docIds.stream()
+                .map(id -> "'" + id + "'")
+                .collect(Collectors.joining(", "));
+
+        return "docId in [" + ids + "]";
     }
 }
