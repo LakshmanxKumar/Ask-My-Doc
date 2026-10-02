@@ -16,6 +16,8 @@ public class AppConstants {
 
     public static final int RERANKED_TOP_N = 3;
 
+    public static final int DB_TOP_K = 5;
+
     public static final String QNA_MODEL = "gemini-2.5-flash";
 
     public static final String REWRITE_MODEL = "gemini-2.5-flash";

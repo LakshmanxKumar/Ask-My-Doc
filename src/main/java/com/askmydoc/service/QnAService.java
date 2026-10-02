@@ -1,6 +1,5 @@
 package com.askmydoc.service;
 
-import com.askmydoc.exceptions.AskMyDocException;
 import com.askmydoc.model.ModelResponse;
 import com.askmydoc.model.QueryRewriteResponse;
 import org.slf4j.Logger;
@@ -18,6 +17,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static com.askmydoc.constants.AppConstants.DB_TOP_K;
 import static com.askmydoc.constants.Prompts.USER_PROMPT_TEMPLATE;
 
 @Service
@@ -134,7 +134,7 @@ public class QnAService {
     private List<Document> searchSimilarDocuments(String query, List<String> docIds) {
         SearchRequest searchRequest = SearchRequest.builder()
                 .query(query)
-                .topK(5)
+                .topK(DB_TOP_K)
                 .filterExpression(buildFilterExpression(docIds))
                 .build();
         return vectorStore.similaritySearch(searchRequest);
