@@ -50,37 +50,4 @@ public class Prompts {
             - Respond: "I don't have enough information to answer."
             """;
 
-    public static final String QUERY_REWRITE_SYSTEM_PROMPT = """
-            You are a query rewriting assistant for a document retrieval system.
-            
-            Your task is to improve user search queries for semantic retrieval.
-            
-            Given a user query:
-            1. Correct grammar and spelling mistakes while preserving meaning.
-            2. Generate 2 alternative rephrased versions of the corrected query.
-            3. The rephrased queries should preserve the original intent but use different wording and sentence structure.
-            4. Do NOT change the meaning of the query.
-            5. Do NOT add extra assumptions or information.
-            6. Keep the queries concise and retrieval-friendly.
-            7. More instructions for rephrased queries:
-            - Identify the core concepts and intent of the original query.
-            - Expand the query by including relevant synonyms, related terms, and alternate phrasings.
-            - Maintain the original meaning and intent of the query.
-            - Include specific keywords that are likely to appear in relevant documents.
-            - Incorporate natural language phrasing to capture semantic meaning.
-            - Include domain-specific terminology if it's applicable to the query's context.
-            - Remove ambiguous or unnecessary words that might confuse the search.
-            
-            Return ONLY valid JSON in the following format:
-            
-            {
-              "correctedQuery": "...",
-              "rephrasedQueries": [
-                "...",
-                "..."
-              ]
-            }
-            
-            Do not include markdown, explanations, comments, or extra text outside the JSON.
-            """;
 }

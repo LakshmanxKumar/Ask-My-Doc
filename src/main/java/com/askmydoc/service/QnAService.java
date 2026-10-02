@@ -1,7 +1,6 @@
 package com.askmydoc.service;
 
 import com.askmydoc.model.ModelResponse;
-import com.askmydoc.model.QueryRewriteResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -12,8 +11,6 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -24,22 +21,17 @@ import static com.askmydoc.constants.Prompts.USER_PROMPT_TEMPLATE;
 public class QnAService {
 
     private final ChatClient qnAChatClient;
-    private final ChatClient rewriteChatClient;
     private final VectorStore vectorStore;
     private final RerankerService rerankerService;
-    private final ExecutorService vectorSearchExecutor;
 
     private static final Logger logger = LoggerFactory.getLogger(QnAService.class);
 
     public QnAService(@Qualifier("qnaChatClient") ChatClient qnAChatClient,
-                      @Qualifier("rewriteChatClient") ChatClient rewriteChatClient, VectorStore vectorStore,
-                      RerankerService rerankerService, ExecutorService vectorSearchExecutor) {
+                      VectorStore vectorStore,
+                      RerankerService rerankerService) {
         this.qnAChatClient = qnAChatClient;
         this.vectorStore = vectorStore;
         this.rerankerService = rerankerService;
-        this.rewriteChatClient = rewriteChatClient;
-        this.vectorSearchExecutor = vectorSearchExecutor;
-
     }
 
     public String ask(String ques, List<String> docIds) {
@@ -67,10 +59,9 @@ public class QnAService {
 
     private List<Document> getRerankedSearchResults(
             String ques, List<String> docIds) {
+        ques = ques.toLowerCase();
 
-        QueryRewriteResponse qrr = rewriteQuery(ques);
-
-        List<Document> uniqueChunks = searchAndDeduplicate(qrr, docIds);
+        List<Document> uniqueChunks = searchAndDeduplicate(ques, docIds);
 
         if (uniqueChunks.isEmpty()) {
             logger.error("No Chunks found");
@@ -79,56 +70,25 @@ public class QnAService {
 
         return rerankerService.reRankDocs(
                 uniqueChunks,
-                qrr.getCorrectedQuery().toLowerCase()
+                ques
         );
     }
 
-    private QueryRewriteResponse rewriteQuery(String ques) {
-
-        String userPrompt = """
-                Rewrite the following query for retrieval:
-                
-                %s
-                """.formatted(ques);
-
-        return rewriteChatClient.prompt()
-                .user(userPrompt)
-                .call()
-                .entity(QueryRewriteResponse.class);
-    }
 
     private List<Document> searchAndDeduplicate(
-            QueryRewriteResponse qrr,
+            String query,
             List<String> docIds) {
 
-        List<String> queries = List.of(
-                qrr.getCorrectedQuery().toLowerCase(),
-                qrr.getRephrasedQueries().getFirst().toLowerCase(),
-                qrr.getRephrasedQueries().getLast().toLowerCase()
-        );
+        List<Document> documentList = searchSimilarDocuments(query, docIds);
 
-        List<CompletableFuture<List<Document>>> futures = queries.stream()
-                .map(query -> CompletableFuture.supplyAsync(
-                        () -> searchSimilarDocuments(query, docIds),
-                        vectorSearchExecutor
-                ))
-                .toList();
-
-        Map<String, Document> uniqueChunks = new LinkedHashMap<>();
-
-        for (CompletableFuture<List<Document>> future : futures) {
-            for (Document doc : future.join()) {
-
-                String uniqueKey =
-                        doc.getMetadata().get("docId")
-                                + ":"
-                                + doc.getMetadata().get("chunkIndex");
-
-                uniqueChunks.putIfAbsent(uniqueKey, doc);
-            }
+        Map<String, Document> chunks = new LinkedHashMap<>();
+        for (Document doc : documentList) {
+            String uniqueKey =
+                    doc.getMetadata().get("docId") + ":" + doc.getMetadata().get("chunkIndex");
+            chunks.putIfAbsent(uniqueKey, doc);
         }
 
-        return new ArrayList<>(uniqueChunks.values());
+        return new ArrayList<>(chunks.values());
     }
 
     private List<Document> searchSimilarDocuments(String query, List<String> docIds) {
