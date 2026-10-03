@@ -15,6 +15,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static com.askmydoc.constants.AppConstants.DB_TOP_K;
+import static com.askmydoc.constants.AppConstants.RERANKED_TOP_N;
 import static com.askmydoc.constants.Prompts.USER_PROMPT_TEMPLATE;
 
 @Service
@@ -61,17 +62,20 @@ public class QnAService {
             String ques, List<String> docIds) {
         ques = ques.toLowerCase();
 
-        List<Document> uniqueChunks = searchAndDeduplicate(ques, docIds);
+        List<Document> searchResults = searchAndDeduplicate(ques, docIds);
 
-        if (uniqueChunks.isEmpty()) {
+        if (searchResults.isEmpty()) {
             logger.error("No Chunks found");
             return Collections.emptyList();
         }
-
-        return rerankerService.reRankDocs(
-                uniqueChunks,
-                ques
-        );
+        if (searchResults.size() > RERANKED_TOP_N) {
+            return rerankerService.reRankDocs(
+                    searchResults,
+                    ques
+            );
+        }
+        // if we don't have enough results, no need to rerank
+        return searchResults;
     }
 
 
