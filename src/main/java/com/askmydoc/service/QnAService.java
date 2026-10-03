@@ -9,13 +9,13 @@ import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
 
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static com.askmydoc.constants.AppConstants.DB_TOP_K;
-import static com.askmydoc.constants.AppConstants.RERANKED_TOP_N;
+import static com.askmydoc.constants.AppConstants.*;
 import static com.askmydoc.constants.Prompts.USER_PROMPT_TEMPLATE;
 
 @Service
@@ -55,6 +55,10 @@ public class QnAService {
                 .call()
                 .entity(ModelResponse.class);
 
+        if (NOT_ENOUGH_INFO_MSG.equalsIgnoreCase(modelResponse.getAnswer())) {
+            logger.warn("LLM response is negative");
+            return NOT_ENOUGH_INFO_MSG;
+        }
         return getValidatedResponse(modelResponse, reRankedResult);
     }
 
@@ -69,10 +73,25 @@ public class QnAService {
             return Collections.emptyList();
         }
         if (searchResults.size() > RERANKED_TOP_N) {
-            return rerankerService.reRankDocs(
-                    searchResults,
-                    ques
-            );
+            try {
+                return rerankerService.reRankDocs(
+                        searchResults,
+                        ques
+                );
+            } catch (HttpClientErrorException e) {
+                if (e.getStatusCode().value() == 429) {
+                    try {
+                        Thread.sleep(60 * 1000L);
+                        return rerankerService.reRankDocs(
+                                searchResults,
+                                ques
+                        );
+                    } catch (Exception exception) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+                logger.error("Failed to rerank due to ", e);
+            }
         }
         // if we don't have enough results, no need to rerank
         return searchResults;
@@ -109,7 +128,7 @@ public class QnAService {
         if (response == null
                 || response.getSupport() == null
                 || response.getSupport().isBlank()) {
-            return "I don't have enough information to answer.";
+            return NOT_ENOUGH_INFO_MSG;
         }
 
         String support = normalize(response.getSupport());
@@ -121,8 +140,8 @@ public class QnAService {
                 return getFormattedResponse(response);
             }
         }
-
-        return "I don't have enough information to answer.";
+        logger.warn("Failed at citation validation");
+        return NOT_ENOUGH_INFO_MSG;
     }
 
     private String normalize(String text) {
