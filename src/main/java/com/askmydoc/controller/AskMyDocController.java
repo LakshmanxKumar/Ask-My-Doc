@@ -1,5 +1,6 @@
 package com.askmydoc.controller;
 
+import com.askmydoc.model.DeleteRequest;
 import com.askmydoc.model.QueryRequest;
 import com.askmydoc.service.DocumentService;
 import com.askmydoc.service.QnAService;
@@ -33,6 +34,16 @@ public class AskMyDocController {
     @PostMapping("query")
     public ResponseEntity<String> query(@RequestBody QueryRequest request) {
         return ResponseEntity.ok(qnaService.ask(request.getUserQuery(), request.getDocIds()));
+    }
+
+    @PostMapping("delete")
+    public ResponseEntity<Void> query(@RequestBody DeleteRequest request) {
+        boolean success = qnaService.deleteByDocIds(request.getDocIds());
+        if (success) {
+            return ResponseEntity.noContent().build();
+        } else {
+            return ResponseEntity.internalServerError().build();
+        }
     }
 
 }

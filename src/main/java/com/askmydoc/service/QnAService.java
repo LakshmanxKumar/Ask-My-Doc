@@ -7,6 +7,8 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.ai.vectorstore.filter.Filter;
+import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
@@ -62,11 +64,25 @@ public class QnAService {
         return getValidatedResponse(modelResponse, reRankedResult);
     }
 
+    public boolean deleteByDocIds(List<String> docIds) {
+        if (docIds == null || docIds.isEmpty()) {
+            throw new IllegalArgumentException("At least one docId must be provided");
+        }
+        try {
+            vectorStore.delete(buildFilterExpression(docIds));
+            logger.info("Deleted all documents with docIds: {}", docIds);
+            return true;
+        } catch (Exception e) {
+            logger.error("Failed to delete documents with docIds: {}", docIds, e);
+            return false;
+        }
+    }
+
     private List<Document> getRerankedSearchResults(
             String ques, List<String> docIds) {
         ques = ques.toLowerCase();
 
-        List<Document> searchResults = searchAndDeduplicate(ques, docIds);
+        List<Document> searchResults = collectSimilarDocuments(ques, docIds);
 
         if (searchResults.isEmpty()) {
             logger.error("No Chunks found");
@@ -98,7 +114,7 @@ public class QnAService {
     }
 
 
-    private List<Document> searchAndDeduplicate(
+    private List<Document> collectSimilarDocuments(
             String query,
             List<String> docIds) {
 
@@ -180,16 +196,12 @@ public class QnAService {
         return (double) intersection / wordsA.size();
     }
 
-    private String buildFilterExpression(List<String> docIds) {
-
+    private Filter.Expression buildFilterExpression(List<String> docIds) {
         if (docIds == null || docIds.isEmpty()) {
             throw new IllegalArgumentException("At least one docId must be provided");
         }
-
-        String ids = docIds.stream()
-                .map(id -> "'" + id + "'")
-                .collect(Collectors.joining(", "));
-
-        return "docId in [" + ids + "]";
+        return new FilterExpressionBuilder()
+                .in("docId", docIds.toArray())
+                .build();
     }
 }
