@@ -5,13 +5,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.document.Document;
-import org.springframework.ai.vectorstore.SearchRequest;
-import org.springframework.ai.vectorstore.VectorStore;
-import org.springframework.ai.vectorstore.filter.Filter;
-import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.HttpClientErrorException;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -23,32 +18,33 @@ import static com.askmydoc.constants.Prompts.USER_PROMPT_TEMPLATE;
 @Service
 public class QnAService {
 
-    private final ChatClient qnAChatClient;
-    private final VectorStore vectorStore;
-    private final RerankerService rerankerService;
-
     private static final Logger logger = LoggerFactory.getLogger(QnAService.class);
 
+    private final ChatClient qnAChatClient;
+    private final RerankerService rerankerService;
+    private final VectorDBService vectorDBService;
+    private final CitationService citationService;
+
     public QnAService(@Qualifier("qnaChatClient") ChatClient qnAChatClient,
-                      VectorStore vectorStore,
-                      RerankerService rerankerService) {
+                      RerankerService rerankerService,
+                      VectorDBService vectorDBService,
+                      CitationService citationService) {
         this.qnAChatClient = qnAChatClient;
-        this.vectorStore = vectorStore;
         this.rerankerService = rerankerService;
+        this.vectorDBService = vectorDBService;
+        this.citationService = citationService;
+    }
+
+    public boolean deleteByDocIds(List<String> docIds) {
+        return vectorDBService.deleteByDocIds(docIds);
     }
 
     public String ask(String ques, List<String> docIds) {
-
         List<Document> reRankedResult = getRerankedSearchResults(ques, docIds);
         if (reRankedResult.isEmpty()) {
             return "Error while fetching";
         }
-        String context = IntStream.range(0, reRankedResult.size())
-                .mapToObj(i -> {
-                    Document d = reRankedResult.get(i);
-                    return "[Chunk " + i + "]: " + d.getText();
-                })
-                .collect(Collectors.joining("\n\n"));
+        String context = prepareContext(reRankedResult);
 
         String userPrompt = USER_PROMPT_TEMPLATE.formatted(context, ques);
 
@@ -61,21 +57,17 @@ public class QnAService {
             logger.warn("LLM response is negative");
             return NOT_ENOUGH_INFO_MSG;
         }
-        return getValidatedResponse(modelResponse, reRankedResult);
+        return citationService.getValidatedResponse(modelResponse, reRankedResult);
     }
 
-    public boolean deleteByDocIds(List<String> docIds) {
-        if (docIds == null || docIds.isEmpty()) {
-            throw new IllegalArgumentException("At least one docId must be provided");
-        }
-        try {
-            vectorStore.delete(buildFilterExpression(docIds));
-            logger.info("Deleted all documents with docIds: {}", docIds);
-            return true;
-        } catch (Exception e) {
-            logger.error("Failed to delete documents with docIds: {}", docIds, e);
-            return false;
-        }
+
+    private static String prepareContext(List<Document> reRankedResult) {
+        return IntStream.range(0, reRankedResult.size())
+                .mapToObj(i -> {
+                    Document d = reRankedResult.get(i);
+                    return "[Chunk " + i + "]: " + d.getText();
+                })
+                .collect(Collectors.joining("\n\n"));
     }
 
     private List<Document> getRerankedSearchResults(
@@ -89,36 +81,16 @@ public class QnAService {
             return Collections.emptyList();
         }
         if (searchResults.size() > RERANKED_TOP_N) {
-            try {
-                return rerankerService.reRankDocs(
-                        searchResults,
-                        ques
-                );
-            } catch (HttpClientErrorException e) {
-                if (e.getStatusCode().value() == 429) {
-                    try {
-                        Thread.sleep(60 * 1000L);
-                        return rerankerService.reRankDocs(
-                                searchResults,
-                                ques
-                        );
-                    } catch (Exception exception) {
-                        Thread.currentThread().interrupt();
-                    }
-                }
-                logger.error("Failed to rerank due to ", e);
-            }
+            return rerankerService.reRankDocs(searchResults, ques);
         }
         // if we don't have enough results, no need to rerank
         return searchResults;
     }
 
-
     private List<Document> collectSimilarDocuments(
             String query,
             List<String> docIds) {
-
-        List<Document> documentList = searchSimilarDocuments(query, docIds);
+        List<Document> documentList = vectorDBService.searchSimilarDocuments(query, docIds);
 
         Map<String, Document> chunks = new LinkedHashMap<>();
         for (Document doc : documentList) {
@@ -126,82 +98,6 @@ public class QnAService {
                     doc.getMetadata().get("docId") + ":" + doc.getMetadata().get("chunkIndex");
             chunks.putIfAbsent(uniqueKey, doc);
         }
-
         return new ArrayList<>(chunks.values());
-    }
-
-    private List<Document> searchSimilarDocuments(String query, List<String> docIds) {
-        SearchRequest searchRequest = SearchRequest.builder()
-                .query(query)
-                .topK(DB_TOP_K)
-                .filterExpression(buildFilterExpression(docIds))
-                .build();
-        return vectorStore.similaritySearch(searchRequest);
-    }
-
-    private String getValidatedResponse(ModelResponse response, List<Document> docs) {
-
-        if (response == null
-                || response.getSupport() == null
-                || response.getSupport().isBlank()) {
-            return NOT_ENOUGH_INFO_MSG;
-        }
-
-        String support = normalize(response.getSupport());
-
-        for (Document doc : docs) {
-            String chunk = normalize(doc.getText());
-
-            if (calculateSimilarity(support, chunk) > 0.7) {
-                return getFormattedResponse(response);
-            }
-        }
-        logger.warn("Failed at citation validation");
-        return NOT_ENOUGH_INFO_MSG;
-    }
-
-    private String normalize(String text) {
-        if (text == null) {
-            return "";
-        }
-        return text.toLowerCase()
-                .replaceAll("\\s+", " ")
-                .trim();
-    }
-
-    private String getFormattedResponse(ModelResponse response) {
-        return """
-                Answer: %s
-                
-                Source: "%s"
-                
-                """.formatted(
-                response.getAnswer(),
-                response.getSupport()
-        );
-    }
-
-    private double calculateSimilarity(String a, String b) {
-        Set<String> wordsA = new HashSet<>(Arrays.asList(a.split("\\s+")));
-        Set<String> wordsB = new HashSet<>(Arrays.asList(b.split("\\s+")));
-
-        int intersection = 0;
-
-        for (String word : wordsA) {
-            if (wordsB.contains(word)) {
-                intersection++;
-            }
-        }
-
-        return (double) intersection / wordsA.size();
-    }
-
-    private Filter.Expression buildFilterExpression(List<String> docIds) {
-        if (docIds == null || docIds.isEmpty()) {
-            throw new IllegalArgumentException("At least one docId must be provided");
-        }
-        return new FilterExpressionBuilder()
-                .in("docId", docIds.toArray())
-                .build();
     }
 }

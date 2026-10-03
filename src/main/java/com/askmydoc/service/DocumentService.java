@@ -20,13 +20,12 @@ public class DocumentService {
 
     private final ParsingService parsingService;
     private final ChunkingService chunkingService;
-    private final VectorStore vectorStore;
+    private final VectorDBService vectorDBService;
 
-    public DocumentService(ParsingService parsingService, ChunkingService chunkingService,
-                           VectorStore vectorStore) {
+    public DocumentService(ParsingService parsingService, ChunkingService chunkingService, VectorDBService vectorDBService) {
         this.parsingService = parsingService;
         this.chunkingService = chunkingService;
-        this.vectorStore = vectorStore;
+        this.vectorDBService = vectorDBService;
     }
 
     public List<String> processDocument(List<MultipartFile> files) {
@@ -49,7 +48,7 @@ public class DocumentService {
             for (int i = 0; i < chunks.size(); i++) {
                 docs.add(createDocument(chunks.get(i), docId, i, file.getOriginalFilename()));
             }
-            vectorStore.add(docs);
+            vectorDBService.addDocuments(docs);
             return docId;
         } catch (ParsingFailureException e) {
             logger.error(e.getMessage());
